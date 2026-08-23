@@ -9,25 +9,29 @@ import time
 from sklearn.ensemble import IsolationForest
 
 # ---------------------------------------------------------
-# ML ENGINE LOGIC (Inline for Fail-Safe Deployment)
+# ML ENGINE LOGIC (Updated Yield Density Evaluation)
 # ---------------------------------------------------------
 def train_and_evaluate_yield(land_area, harvested_weight):
-    # Synthetic baseline training data for organic yield (15-35 quintals/acre)
-    np.random.seed(42)
-    normal_land = np.random.uniform(1.0, 50.0, 200)
-    normal_yield = normal_land * np.random.uniform(15.0, 35.0, 200)
-    X_train = np.column_stack((normal_land, normal_yield))
-    
-    model = IsolationForest(contamination=0.05, random_state=42)
-    model.fit(X_train)
-    
-    # Predict input batch
-    X_test = np.array([[land_area, harvested_weight]])
-    prediction = model.predict(X_test)[0]
-    anomaly_score = model.decision_function(X_test)[0]
     yield_per_acre = harvested_weight / land_area
     
-    is_valid = bool(prediction == 1)
+    # Synthetic yield density training set (Realistic organic range: 10 - 45 quintals/acre)
+    np.random.seed(42)
+    normal_yields = np.random.uniform(12.0, 40.0, 300).reshape(-1, 1)
+    
+    model = IsolationForest(contamination=0.02, random_state=42)
+    model.fit(normal_yields)
+    
+    # Evaluate input yield density
+    X_test = np.array([[yield_per_acre]])
+    prediction = model.predict(X_test)[0]
+    anomaly_score = model.decision_function(X_test)[0]
+    
+    # Valid organic range: 10.0 to 45.0 Quintals/Acre
+    if 10.0 <= yield_per_acre <= 45.0:
+        is_valid = True
+    else:
+        is_valid = False if prediction == -1 else True
+        
     return is_valid, anomaly_score, yield_per_acre
 
 # ---------------------------------------------------------
@@ -110,7 +114,7 @@ with tab1:
             st.info(f"**Batch #{batch_id}** successfully minted to Smart Contract Ledger! Check 'Blockchain Ledger' tab.")
         else:
             st.error(f"⚠️ **AI Fraud Alert! High Anomaly Detected (Score: {anomaly_score:.2f})**")
-            st.warning(f"Calculated Yield Density is **{yield_per_acre:.2f} Quintals/Acre**, which exceeds standard organic harvest baselines. Minting blocked to prevent fraud.")
+            st.warning(f"Calculated Yield Density is **{yield_per_acre:.2f} Quintals/Acre**, which exceeds standard organic harvest baselines (10-45 q/acre). Minting blocked to prevent fraud.")
 
 # ---------------------------------------------------------
 # TAB 2: BLOCKCHAIN LEDGER & DYNAMIC QR
