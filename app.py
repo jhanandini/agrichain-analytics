@@ -1,153 +1,164 @@
 import streamlit as st
+import numpy as np
+import pandas as pd
 import qrcode
 from io import BytesIO
-import json
+from PIL import Image
+import hashlib
 import time
-from ml_engine import YieldAnomalyDetector
+from ml_engine import train_and_evaluate_yield
 
-# Page configuration
-st.set_page_config(
-    page_title="AgriChain Analytics",
-    page_icon="🌾",
-    layout="wide"
-)
+# Page Config
+st.set_page_config(page_title="AgriChain Analytics", page_icon="🌾", layout="wide")
 
-# Initialize Session State to store verified batches locally
+# App Header
+st.title("🌾 AgriChain Analytics")
+st.markdown("### *Decentralized Supply Chain Traceability & AI Yield Anomaly Engine*")
+st.divider()
+
+# Initialize Session State
 if "batches" not in st.session_state:
-    st.session_state.batches = []
+    st.session_state["batches"] = []
 
-# Title & Header
-st.title("AgriChain Analytics")
-st.caption("Decentralized Traceability & AI Anomaly Verification Engine for Organic Produce")
-st.markdown("---")
-
-# Initialize ML Engine
-detector = YieldAnomalyDetector()
-
-# Tabs for different user roles
-tab1, tab2, tab3 = st.tabs(["Farmer Batch Logging", "Blockchain Ledger & QR", "Consumer Verification"])
+# Tabs Setup
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📝 Farmer Batch Logging", 
+    "🔗 Blockchain Ledger & Dynamic QR", 
+    "🔍 Consumer Verification Portal",
+    "⚙️ Web3 Node & Network Status"
+])
 
 # ---------------------------------------------------------
-# TAB 1: FARMER BATCH LOGGING
+# TAB 1: FARMER BATCH LOGGING & AI AUDIT ENGINE
 # ---------------------------------------------------------
 with tab1:
-    st.header("Log New Organic Harvest Batch")
+    st.header("Farmer Batch Registration & AI Audit")
+    st.caption("Submit harvest batch data. The AI Isolation Forest engine evaluates yield-to-land ratio before minting onto the blockchain.")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        farmer_id = st.text_input("Farmer ID / Aadhaar Hash", "FRM-2026-8842")
-        crop_type = st.selectbox("Crop Type", ["Organic Wheat", "Organic Rice", "Organic Pulses", "Organic Cotton", "Organic Vegetables"])
-        land_area = st.number_input("Land Area (in Acres)", min_value=0.1, value=2.0, step=0.5)
-        
+        farmer_name = st.text_input("Farmer / Producer Name", "Nandini Jha")
+        crop_type = st.selectbox("Crop Type", ["Organic Wheat", "Organic Rice", "Organic Pulses", "Organic Cotton"])
+        location = st.text_input("Farm Location Coordinates", "28.9931° N, 77.0151° E (Sonipat, HR)")
+    
     with col2:
-        harvest_weight = st.number_input("Harvested Weight (in Quintals)", min_value=0.1, value=30.0, step=5.0)
-        location = st.text_input("Farm Geo-Coordinates", "28.9931° N, 77.0151° E (Sonipat, HR)")
-        certification_no = st.text_input("Organic Certificate Ref No.", "ORG-IN-2026-9041")
-
-    if st.button("Submit Batch for AI Verification", type="primary"):
-        with st.spinner("Running ML Anomaly Detection Model..."):
-            time.sleep(0.5)
-            # Call ML engine
-            result = detector.verify_yield(land_area_acres=land_area, harvest_weight_quintals=harvest_weight)
-
-        if result["status"] == "PASS":
-            st.success(f"AI Yield Audit Passed! Yield Ratio: {result['yield_ratio']} q/acre.")
+        land_area = st.number_input("Land Area (in Acres)", min_value=0.5, max_value=500.0, value=2.0, step=0.5)
+        harvested_weight = st.number_input("Harvested Yield (in Quintals)", min_value=1.0, max_value=10000.0, value=30.0, step=1.0)
+        fertilizer_used = st.text_input("Certifications / Bio-Inputs Used", "Bio-Compost, NPK Organic Liquid")
+    
+    if st.button("🚀 Submit Batch for AI Verification", type="primary"):
+        with st.spinner("AI Engine Evaluating Yield Anomaly..."):
+            is_valid, anomaly_score, yield_per_acre = train_and_evaluate_yield(land_area, harvested_weight)
+            time.sleep(1)
             
-            # Simulate Blockchain & IPFS commit
-            batch_id = len(st.session_state.batches) + 1
-            ipfs_hash = f"QmXyZ{hash(farmer_id + str(time.time())) % 1000000000000000}"
-            tx_hash = f"0x{hash(str(batch_id) + ipfs_hash) & 0xffffffffffffffffffffffffffffffff:032x}"
+        if is_valid:
+            st.success(f"✅ **AI Yield Verification Passed!** Yield density: **{yield_per_acre:.2f} Quintals/Acre** (Within realistic organic parameters).")
             
-            batch_data = {
+            # Generate Cryptographic Hashes
+            raw_data = f"{farmer_name}{crop_type}{land_area}{harvested_weight}{location}{time.time()}"
+            ipfs_hash = "Qm" + hashlib.sha256(raw_data.encode()).hexdigest()[:44]
+            tx_hash = "0x" + hashlib.sha256((raw_data + "polygon").encode()).hexdigest()
+            batch_id = f"AGRI-{len(st.session_state['batches']) + 101}"
+            
+            # Create QR Code
+            qr_data = f"https://agrichain.analytics/verify?batch_id={batch_id}&ipfs={ipfs_hash}"
+            qr = qrcode.QRCode(version=1, box_size=10, border=2)
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            qr_bytes = buf.getvalue()
+            
+            # Save Batch Record
+            batch_record = {
                 "batch_id": batch_id,
-                "farmer_id": farmer_id,
-                "crop_type": crop_type,
+                "farmer": farmer_name,
+                "crop": crop_type,
                 "land_area": land_area,
-                "harvest_weight": harvest_weight,
-                "yield_ratio": result["yield_ratio"],
+                "weight": harvested_weight,
+                "yield_per_acre": yield_per_acre,
                 "location": location,
                 "ipfs_hash": ipfs_hash,
                 "tx_hash": tx_hash,
-                "status": "VERIFIED_ON_CHAIN"
+                "status": "Verified & Minted",
+                "qr_code": qr_bytes
             }
+            st.session_state["batches"].append(batch_record)
             
-            st.session_state.batches.append(batch_data)
-            st.info(f"🔗 Batch #{batch_id} successfully minted on Polygon Testnet! IPFS Hash: `{ipfs_hash}`")
-            
+            st.balloons()
+            st.info(f"**Batch #{batch_id}** successfully minted to Smart Contract Ledger! Check 'Blockchain Ledger' tab.")
         else:
-            st.error(f"🚨 AI Yield Audit FLAGGED! {result['reason']}")
-            st.warning("Batch flagged for manual inspection. Cannot be minted to blockchain ledger.")
+            st.error(f"⚠️ **AI Fraud Alert! High Anomaly Detected (Score: {anomaly_score:.2f})**")
+            st.warning(f"Calculated Yield Density is **{yield_per_acre:.2f} Quintals/Acre**, which exceeds standard organic harvest baselines. Minting blocked to prevent fraud.")
 
 # ---------------------------------------------------------
-# TAB 2: BLOCKCHAIN LEDGER & QR GENERATOR
+# TAB 2: BLOCKCHAIN LEDGER & DYNAMIC QR
 # ---------------------------------------------------------
 with tab2:
-    st.header("Verified Batches & Dynamic QR Generator")
+    st.header("Immutable Ledger & Dynamic QR Output")
     
-    if not st.session_state.batches:
-        st.info("No batches logged yet. Use Tab 1 to submit a harvest batch.")
+    if len(st.session_state["batches"]) == 0:
+        st.info("No batches minted yet. Submit a batch in Tab 1 to generate ledger records.")
     else:
-        for b in st.session_state.batches:
-            with st.expander(f"Batch #{b['batch_id']} - {b['crop_type']} ({b['status']})"):
+        for batch in reversed(st.session_state["batches"]):
+            with st.expander(f"📦 Batch ID: {batch['batch_id']} - {batch['crop']} ({batch['status']})"):
                 c1, c2 = st.columns([2, 1])
-                
                 with c1:
-                    st.write(f"**Farmer ID:** {b['farmer_id']}")
-                    st.write(f"**Geo-Coordinates:** {b['location']}")
-                    st.write(f"**Yield Ratio:** {b['yield_ratio']} q/acre ({b['harvest_weight']} q / {b['land_area']} acres)")
-                    st.write(f"**IPFS Certificate Hash:** `{b['ipfs_hash']}`")
-                    st.write(f"**Polygon Tx Hash:** `{b['tx_hash']}`")
-                
+                    st.write(f"**Farmer:** {batch['farmer']}")
+                    st.write(f"**Location:** {batch['location']}")
+                    st.write(f"**Yield Density:** {batch['yield_per_acre']:.2f} Quintals/Acre")
+                    st.code(f"IPFS Certificate Hash: {batch['ipfs_hash']}", language="text")
+                    st.code(f"Polygon Transaction Hash: {batch['tx_hash']}", language="text")
                 with c2:
-                    # Generate QR Code
-                    qr_data = json.dumps({
-                        "batch_id": b["batch_id"],
-                        "crop": b["crop_type"],
-                        "farmer": b["farmer_id"],
-                        "ipfs": b["ipfs_hash"],
-                        "tx": b["tx_hash"]
-                    })
-                    
-                    qr = qrcode.QRCode(version=1, box_size=5, border=2)
-                    qr.add_data(qr_data)
-                    qr.make(fit=True)
-                    img = qr.make_image(fill_color="black", back_color="white")
-                    
-                    buf = BytesIO()
-                    img.save(buf, format="PNG")
-                    byte_im = buf.getvalue()
-                    
-                    st.image(byte_im, caption=f"Package QR Code (Batch #{b['batch_id']})", width=180)
+                    st.image(batch["qr_code"], caption=f"Dynamic Package QR ({batch['batch_id']})", width=180)
 
 # ---------------------------------------------------------
-# TAB 3: CONSUMER VERIFICATION
+# TAB 3: CONSUMER VERIFICATION PORTAL
 # ---------------------------------------------------------
 with tab3:
-    st.header("Consumer Trust Verification Portal")
-    st.write("Simulate scanning product package QR code to verify 100% genuine organic origin.")
+    st.header("Retail Consumer QR Scan Verification")
+    st.caption("Consumers scan product QR codes at retail stores to verify origin authenticity and AI audit status.")
     
-    if not st.session_state.batches:
-        st.warning("Log at least one batch in Tab 1 to test consumer verification.")
+    search_id = st.text_input("Enter Batch ID (e.g. AGRI-101)", "AGRI-101")
+    
+    found_batch = None
+    for b in st.session_state["batches"]:
+        if b["batch_id"].upper() == search_id.strip().upper():
+            found_batch = b
+            break
+            
+    if found_batch:
+        st.success("✅ **Authentic Organic Produce Verified!**")
+        st.json({
+            "Batch ID": found_batch["batch_id"],
+            "Producer": found_batch["farmer"],
+            "Crop Type": found_batch["crop"],
+            "Land Area": f"{found_batch['land_area']} Acres",
+            "Harvest Weight": f"{found_batch['weight']} Quintals",
+            "AI Yield Audit Status": "PASS (Realistic Organic Yield)",
+            "IPFS Cryptographic Proof": found_batch["ipfs_hash"],
+            "Polygon Testnet Tx": found_batch["tx_hash"]
+        })
     else:
-        selected_batch_id = st.selectbox("Select Batch ID to Scan", [b["batch_id"] for b in st.session_state.batches])
-        target_batch = next((b for b in st.session_state.batches if b["batch_id"] == selected_batch_id), None)
-        
-        if target_batch:
-            st.markdown("### Verified Supply Chain Origin")
-            st.success("Authenticated Organic Product")
-            
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Batch ID", f"#{target_batch['batch_id']}")
-            m2.metric("Crop", target_batch["crop_type"])
-            m3.metric("AI Yield Status", "PASSED")
-            m4.metric("Blockchain Ledger", "VERIFIED")
-            
-            st.markdown("#### Supply Chain Provenance Trail")
-            st.json({
-                "Origin Farm Coordinates": target_batch["location"],
-                "Organic Certification IPFS Hash": target_batch["ipfs_hash"],
-                "Polygon Smart Contract Transaction": target_batch["tx_hash"],
-                "AI Yield Ratio Check": f"{target_batch['yield_ratio']} Quintals/Acre (Normal Range)",
-                "Verification Timestamp": "2026-08-22 UTC"
-            })
+        st.warning("Enter a valid Batch ID from Tab 1 to view live consumer origin provenance.")
+
+# ---------------------------------------------------------
+# TAB 4: WEB3 NODE & NETWORK STATUS
+# ---------------------------------------------------------
+with tab4:
+    st.header("Web3 Node & Smart Contract Execution Environment")
+    
+    col_a, col_b = col_c = st.columns(3)
+    col_a.metric(label="Target Blockchain Network", value="Polygon Amoy Testnet")
+    col_b.metric(label="Smart Contract Standard", value="ERC-721 / IPFS Hash")
+    col_c.metric(label="Consensus Protocol", value="Proof-of-Stake (PoS)")
+    
+    st.subheader("Contract Info")
+    st.code("""
+// Contract Address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+// Solidity Compiler: ^0.8.20
+// Gas Usage per Mint: ~0.0024 MATIC
+    """, language="solidity")
