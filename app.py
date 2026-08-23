@@ -39,7 +39,7 @@ def train_and_evaluate_yield(land_area, harvested_weight):
 # ---------------------------------------------------------
 st.set_page_config(page_title="AgriChain Analytics", page_icon="🌾", layout="wide")
 
-st.title("🌾 AgriChain Analytics")
+st.title("AgriChain Analytics")
 st.markdown("### *Decentralized Supply Chain Traceability & AI Yield Anomaly Engine*")
 st.divider()
 
@@ -47,10 +47,10 @@ if "batches" not in st.session_state:
     st.session_state["batches"] = []
 
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📝 Farmer Batch Logging", 
-    "🔗 Blockchain Ledger & Dynamic QR", 
-    "🔍 Consumer Verification Portal",
-    "⚙️ Web3 Node & Network Status"
+    "Farmer Batch Logging", 
+    "Blockchain Ledger & Dynamic QR", 
+    "Consumer Verification Portal",
+    "Web3 Node & Network Status"
 ])
 
 # ---------------------------------------------------------
@@ -72,13 +72,13 @@ with tab1:
         harvested_weight = st.number_input("Harvested Yield (in Quintals)", min_value=1.0, max_value=10000.0, value=30.0, step=1.0)
         fertilizer_used = st.text_input("Certifications / Bio-Inputs Used", "Bio-Compost, NPK Organic Liquid")
     
-    if st.button("🚀 Submit Batch for AI Verification", type="primary"):
+    if st.button("Submit Batch for AI Verification", type="primary"):
         with st.spinner("AI Engine Evaluating Yield Anomaly..."):
             is_valid, anomaly_score, yield_per_acre = train_and_evaluate_yield(land_area, harvested_weight)
             time.sleep(1)
             
         if is_valid:
-            st.success(f"✅ **AI Yield Verification Passed!** Yield density: **{yield_per_acre:.2f} Quintals/Acre** (Within realistic organic parameters).")
+            st.success(f"**AI Yield Verification Passed!** Yield density: **{yield_per_acre:.2f} Quintals/Acre** (Within realistic organic parameters).")
             
             raw_data = f"{farmer_name}{crop_type}{land_area}{harvested_weight}{location}{time.time()}"
             ipfs_hash = "Qm" + hashlib.sha256(raw_data.encode()).hexdigest()[:44]
@@ -113,7 +113,7 @@ with tab1:
             st.balloons()
             st.info(f"**Batch #{batch_id}** successfully minted to Smart Contract Ledger! Check 'Blockchain Ledger' tab.")
         else:
-            st.error(f"⚠️ **AI Fraud Alert! High Anomaly Detected (Score: {anomaly_score:.2f})**")
+            st.error(f"**AI Fraud Alert! High Anomaly Detected (Score: {anomaly_score:.2f})**")
             st.warning(f"Calculated Yield Density is **{yield_per_acre:.2f} Quintals/Acre**, which exceeds standard organic harvest baselines (10-45 q/acre). Minting blocked to prevent fraud.")
 
 # ---------------------------------------------------------
@@ -126,7 +126,7 @@ with tab2:
         st.info("No batches minted yet. Submit a batch in Tab 1 to generate ledger records.")
     else:
         for batch in reversed(st.session_state["batches"]):
-            with st.expander(f"📦 Batch ID: {batch['batch_id']} - {batch['crop']} ({batch['status']})"):
+            with st.expander(f"Batch ID: {batch['batch_id']} - {batch['crop']} ({batch['status']})"):
                 c1, c2 = st.columns([2, 1])
                 with c1:
                     st.write(f"**Farmer:** {batch['farmer']}")
