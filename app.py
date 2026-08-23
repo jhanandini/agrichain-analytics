@@ -6,21 +6,42 @@ from io import BytesIO
 from PIL import Image
 import hashlib
 import time
-from ml_engine import train_and_evaluate_yield
+from sklearn.ensemble import IsolationForest
 
-# Page Config
+# ---------------------------------------------------------
+# ML ENGINE LOGIC (Inline for Fail-Safe Deployment)
+# ---------------------------------------------------------
+def train_and_evaluate_yield(land_area, harvested_weight):
+    # Synthetic baseline training data for organic yield (15-35 quintals/acre)
+    np.random.seed(42)
+    normal_land = np.random.uniform(1.0, 50.0, 200)
+    normal_yield = normal_land * np.random.uniform(15.0, 35.0, 200)
+    X_train = np.column_stack((normal_land, normal_yield))
+    
+    model = IsolationForest(contamination=0.05, random_state=42)
+    model.fit(X_train)
+    
+    # Predict input batch
+    X_test = np.array([[land_area, harvested_weight]])
+    prediction = model.predict(X_test)[0]
+    anomaly_score = model.decision_function(X_test)[0]
+    yield_per_acre = harvested_weight / land_area
+    
+    is_valid = bool(prediction == 1)
+    return is_valid, anomaly_score, yield_per_acre
+
+# ---------------------------------------------------------
+# STREAMLIT UI CONFIGURATION
+# ---------------------------------------------------------
 st.set_page_config(page_title="AgriChain Analytics", page_icon="🌾", layout="wide")
 
-# App Header
 st.title("🌾 AgriChain Analytics")
 st.markdown("### *Decentralized Supply Chain Traceability & AI Yield Anomaly Engine*")
 st.divider()
 
-# Initialize Session State
 if "batches" not in st.session_state:
     st.session_state["batches"] = []
 
-# Tabs Setup
 tab1, tab2, tab3, tab4 = st.tabs([
     "📝 Farmer Batch Logging", 
     "🔗 Blockchain Ledger & Dynamic QR", 
@@ -29,7 +50,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# TAB 1: FARMER BATCH LOGGING & AI AUDIT ENGINE
+# TAB 1: FARMER BATCH LOGGING
 # ---------------------------------------------------------
 with tab1:
     st.header("Farmer Batch Registration & AI Audit")
@@ -55,14 +76,12 @@ with tab1:
         if is_valid:
             st.success(f"✅ **AI Yield Verification Passed!** Yield density: **{yield_per_acre:.2f} Quintals/Acre** (Within realistic organic parameters).")
             
-            # Generate Cryptographic Hashes
             raw_data = f"{farmer_name}{crop_type}{land_area}{harvested_weight}{location}{time.time()}"
             ipfs_hash = "Qm" + hashlib.sha256(raw_data.encode()).hexdigest()[:44]
             tx_hash = "0x" + hashlib.sha256((raw_data + "polygon").encode()).hexdigest()
             batch_id = f"AGRI-{len(st.session_state['batches']) + 101}"
             
-            # Create QR Code
-            qr_data = f"https://agrichain.analytics/verify?batch_id={batch_id}&ipfs={ipfs_hash}"
+            qr_data = f"https://agrichain-analytics.streamlit.app/?batch_id={batch_id}"
             qr = qrcode.QRCode(version=1, box_size=10, border=2)
             qr.add_data(qr_data)
             qr.make(fit=True)
@@ -72,7 +91,6 @@ with tab1:
             img.save(buf, format="PNG")
             qr_bytes = buf.getvalue()
             
-            # Save Batch Record
             batch_record = {
                 "batch_id": batch_id,
                 "farmer": farmer_name,
@@ -151,12 +169,12 @@ with tab3:
 with tab4:
     st.header("Web3 Node & Smart Contract Execution Environment")
     
-    col_a, col_b = col_c = st.columns(3)
-    col_a.metric(label="Target Blockchain Network", value="Polygon Amoy Testnet")
-    col_b.metric(label="Smart Contract Standard", value="ERC-721 / IPFS Hash")
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric(label="Target Network", value="Polygon Amoy Testnet")
+    col_b.metric(label="Contract Standard", value="ERC-721 / IPFS Hash")
     col_c.metric(label="Consensus Protocol", value="Proof-of-Stake (PoS)")
     
-    st.subheader("Contract Info")
+    st.subheader("Smart Contract Info")
     st.code("""
 // Contract Address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 // Solidity Compiler: ^0.8.20
